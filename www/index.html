@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>Weatherstation</title>
+  <!--[if lt IE 9]><script language="javascript" type="text/javascript" src="dist/excanvas.js"></script><![endif]-->
+  
+  <link rel="stylesheet" type="text/css" href="dist/jquery.jqplot.min.css" />
+  <link rel="stylesheet" type="text/css" href="weather.css" />
+  
+  <!-- BEGIN: load jquery -->
+
+  <script language="javascript" type="text/javascript" src="dist/jquery.min.js"></script>
+  <!-- END: load jquery -->
+  
+  <!-- BEGIN: load jqplot -->
+  <script language="javascript" type="text/javascript" src="dist/jquery.jqplot.min.js"></script>
+
+  <!-- END: load jqplot -->
+  <script type="text/javascript" src="dist/plugins/jqplot.json2.min.js"></script> 
+  <script type="text/javascript" src="dist/plugins/jqplot.dateAxisRenderer.min.js"></script>
+  <script type="text/javascript" src="dist/plugins/jqplot.highlighter.min.js"></script>
+  <script type="text/javascript" src="dist/plugins/jqplot.cursor.min.js"></script>
+  <script type="text/javascript" src="dist/plugins/jqplot.categoryAxisRenderer.min.js"></script>
+
+  <script type="text/javascript" language="javascript">
+
+
+var timescale = new Array();
+timescale[0] = 30*24;
+timescale[1] = 72;
+timescale[2] = 12;
+
+	function adjust_tlen(delta_tlen) {
+		el = $("input:text[name='tlen']");
+		current = Math.round(el.val());
+		new_val = Math.round(current + delta_tlen)
+		if (new_val > 0) {
+			el.val(new_val);
+		}
+	}
+
+	function adjust_tpos(delta_tpos) {
+		el = $("input:text[name='tpos']");
+		current = Math.round(el.val());
+		new_val = Math.round(current + delta_tpos)
+		if (new_val > 0) {
+			el.val(new_val);
+		}
+	}
+
+	function set_t(tlen, tpos) {
+		$("input:text[name='tlen']").val(tlen);
+		$("input:text[name='tpos']").val(tpos);
+	}
+
+
+	function update_time() {
+		res = $("input:radio[name='resolution']:checked").val();
+		tid = timescale[res];
+
+		set_t(tid, 0);
+	}
+
+	function get_options() {
+		map = {
+			'sensor' : $("input:radio[name='sensor_id']:checked").val(),
+			'res' : $("input:radio[name='resolution']:checked").val(),
+			'maxmin' : $("input:checkbox[name='maxmin']:checked").is(':checked'),
+			};
+
+		if (map['maxmin']) {
+			map['maxmin'] = 1;
+		} else {
+			map['maxmin'] = 0;
+		};
+
+		d = new Date();
+		timestamp = Math.round(d.getTime() / 1000.0);
+		tlen = Math.round($("input:text[name='tlen']").val()*3600);
+		tpos = Math.round($("input:text[name='tpos']").val()*3600);
+
+		map['start'] = timestamp - tpos - tlen;
+		map['stop']  = timestamp - tpos;
+		return map;
+	}
+
+
+var defaultOptionsObj = {
+//	title : 'Weather data',
+	seriesDefaults:{
+		rendererOptions: {
+			smooth: true,
+		},
+	},
+	axes:{
+		xaxis:{
+			renderer:$.jqplot.DateAxisRenderer,
+			},
+		},
+	highlighter: {
+		show: true,
+		sizeAdjust: 7.5 },
+	cursor: { show: false, },
+};
+
+	function update_graph() {
+		$('#spin').show()
+		var opts = get_options()
+		$.ajax({
+			url: "./cgi-bin/getdata.py",
+			type: 'GET',
+			data: opts,
+			dataType: 'json',
+			success: function (data) {
+				$('#error').hide();
+				var format_str = '';
+				if (opts['res'] == 0) {
+					format_str = '%b&nbsp;%#d';
+				} else if (opts['res'] == 1) {
+					format_str = '%H';
+				} else if (opts['res'] == 2) {
+					format_str = '%H:%M';
+				}
+
+				graphOptionsObj = $.extend(true, {}, defaultOptionsObj, {
+						axes:{
+							xaxis:{
+							tickOptions:{ formatString: format_str },
+							}
+						}
+					});
+
+				if (data['bands']) {
+					graphOptionsObj = $.extend(true, {}, graphOptionsObj, {
+					series: [{
+							rendererOptions: {
+								bandData: data['bands'],
+
+								// turn on smoothing
+								smooth: true
+							}
+						}],
+					});
+				}
+
+				$.jqplot('chart', data['values'], graphOptionsObj).replot();
+				$('#spin').hide(100);
+			},
+
+			error:function (xhr, textStatus, thrownError){
+				$('#spin').hide(100);
+				$('#error').show(100);
+				//$('#errormsg').text(xhr.statusText + " ("+textStatus+")");
+				$('#errormsg').text(xhr.statusText);
+			},
+		});
+	}
+
+
+  $(document).ready(function(){
+      $.jqplot.config.enablePlugins = true;
+
+	update_time();
+	update_graph();
+	//hhh = $('#contentwrapper').height() - $('#leftcolumn').offset().top;
+	//$('#leftcolumn').height(hhh);
+});
+
+	function set_preset(sensor_id, res, maxmin) {
+		$("input:radio[name='sensor_id']")[sensor_id].checked = true;
+		$("input:radio[name='resolution']")[res].checked = true;
+		$("input:checkbox[name='maxmin']").attr('checked', maxmin==1)
+		update_time();
+	}
+
+	function toggle_visibility() {
+		if ($('#settings').is(":visible")) {
+			$('#settings').hide(500);
+			$('#showhide').text("Show settings");
+		} else {
+			$('#settings').show(500);
+			$('#showhide').text("Hide settings");
+		}
+		return false;
+	}
+
+  </script>
+  </head>
+
+<body>
+<div id="maincontainer"><div id="topsection"><div class="innertube"><h1>Weatherstation</h1></div></div>
+
+<div id="contentwrapper">
+<div id="contentcolumn">
+<div class="innertube">
+
+<!-- chart -->
+<div id='chart' style="width:500px; height:400px;"></div>
+<!-- /chart -->
+
+<div class="settings">
+<table class="change">
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td>Change data:</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="#" onclick="adjust_tlen(-24); update_graph(this); return false;">-1 day</a></td>
+<td><a href="#" onclick="adjust_tlen(-6);  update_graph(this); return false;">-6 h</a></td>
+<td><a href="#" onclick="adjust_tlen(-3);  update_graph(this); return false;">-3 h</a></td>
+<td>amount</td>
+<td><a href="#" onclick="adjust_tlen(+3);  update_graph(this); return false;">+3 h</a></td>
+<td><a href="#" onclick="adjust_tlen(+6);  update_graph(this); return false;">+6 h</a></td>
+<td><a href="#" onclick="adjust_tlen(+24); update_graph(this); return false;">+1 day</a></td>
+</tr>
+<tr>
+<td><a href="#" onclick="adjust_tpos(+24); update_graph(this); return false;">-1 day</a></td>
+<td><a href="#" onclick="adjust_tpos(+6);  update_graph(this); return false;">-6 h</a></td>
+<td><a href="#" onclick="adjust_tpos(+3);  update_graph(this); return false;">-3 h</a></td>
+<td>position</td>
+<td><a href="#" onclick="adjust_tpos(-3);  update_graph(this); return false;">+3 h</a></td>
+<td><a href="#" onclick="adjust_tpos(-6);  update_graph(this); return false;">+6 h</a></td>
+<td><a href="#" onclick="adjust_tpos(-24); update_graph(this); return false;">+1 day</a></td>
+</tr>
+</table>
+
+</div> <!-- /settings -->
+
+
+
+</div> <!-- /innertube -->
+</div> <!-- /contentcolumn -->
+</div> <!-- /contentwrapper -->
+
+<div id="leftcolumn">
+<div class="innertube">
+
+<div class="leftmenu-item">
+<h1>Presets:</h1>
+<ul>
+<li>
+	<a href="#" onclick="set_preset(0, 2, 0); update_graph(this); return false;">Temperatur 12h</a>
+</li>
+<li>
+	<a href="#" onclick="set_preset(0, 1, 0); update_graph(this); return false;">Temperatur 72h</a>
+</li>
+<li>
+	<a href="#" onclick="set_preset(0, 0, 1); update_graph(this); return false;">Temperatur 30d trend</a>
+</li>
+<li>
+	<a href="#" onclick="set_preset(1, 1, 0); update_graph(this); return false;">Lufttrykk 72h</a>
+</li>
+<li>
+	<a href="#" onclick="set_preset(1, 0, 1); update_graph(this); return false;">Lufttrykk 30d trend</a>
+</li>
+</div>
+
+
+<div class="leftmenu-item">
+<div class="settings">
+
+<form id="myform" action="#" name="control" onsubmit="return false;">
+<div class="setting1">
+<h1>Sensor</h1>
+<label><input type="radio" name="sensor_id" value="1" onchange="update_graph(this);" checked>Temperature</label><br />
+<label><input type="radio" name="sensor_id" value="2" onchange="update_graph(this);">Pressure</label><br />
+</div>
+<div class="setting1">
+<h1>Resolution</h1>
+<label><input type="radio" name="resolution" value="0" onchange="update_time(); update_graph(this);">Days</label><br />
+<label><input type="radio" name="resolution" value="1" onchange="update_time(); update_graph(this);">Hours</label><br />
+<label><input type="radio" name="resolution" value="2" onchange="update_time(); update_graph(this);" checked>Minutes</label><br />
+</div>
+<div class="setting1">
+<h1>Max/min</h1>
+<label><input type="checkbox" name="maxmin" value="1" onchange="update_graph(this);">Show variation</label>
+</div>
+
+<div class="setting1">
+<h1>Time</h1>
+<label>Length   <input name="tlen" type="text" size="4" value="" onchange="update_graph(); return false;"></label>
+<label>Position <input name="tpos" type="text" size="4" value="" onchange="update_graph(); return false;"></label>
+</div>
+
+</form>
+</div>
+</div>
+
+<div class="leftmenu-item">
+<div>
+	<a href="#" onclick="update_graph(this); return false;">Reload data</a>
+</div>
+</div>
+
+
+</div> <!--/innertube-->
+</div> <!--/leftcolumn-->
+
+
+<div id="footer">
+&nbsp;<img id="spin" style="display: none" src="spin.gif" />
+
+	<div id="error" style="color: red; display: none">Error:&nbsp;<span id="errormsg"></span></div>
+
+</div> <!-- /footer -->
+
+
+</body>
+</html>
