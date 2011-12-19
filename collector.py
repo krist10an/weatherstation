@@ -19,11 +19,11 @@ class Collector(object):
 		self.overflow_object = None
 		self.propagate_minmax = propagate_minmax
 
-		logging.basicConfig(filename='datalogs/collector.log',level=logging.DEBUG)
-		if 1:
-			self.logger = logging.getLogger("collector")
-		else:
-			self.logger = None
+		self.logger = None
+		
+	def enable_log(self, filename='datalogs/collector.log'):
+		logging.basicConfig(filename=filename,level=logging.DEBUG)
+		self.logger = logging.getLogger("collector")
 
 	def log(self, str):
 		if self.logger:
