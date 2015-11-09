@@ -1,0 +1,5 @@
+---
+#sudo ansible-galaxy install gotansible.nodejs
+- hosts: all
+  roles:
+    - gotansible.nodejs
