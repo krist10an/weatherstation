@@ -1,0 +1,10 @@
+---
+- name: Install Mosquitto
+  apt: name={{item}} state=present
+  with_items:
+  - mosquitto
+  - mosquitto-clients
+  sudo: True
+
+- name: Check Mosquitto running
+  service: name=mosquitto state=started

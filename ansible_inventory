@@ -1,2 +1,5 @@
 [all]
 vagrant ansible_connection=local ansible_user=vagrant
+
+#[pi]
+#pi1 ansible_host=192.168.1.117 ansible_connection=ssh ansible_user=pi

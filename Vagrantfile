@@ -6,6 +6,7 @@ apt-get install -y ansible
 
 mkdir -p /etc/ansible/
 cp /vagrant/ansible_inventory /etc/ansible/hosts
+ansible-galaxy install gotansible.nodejs
 SCRIPT
 
 $provision = <<SCRIPT
@@ -16,7 +17,10 @@ SCRIPT
 
 Vagrant.configure("2") do |config|
   config.vm.box = "ubuntu/trusty64"
-
+    config.vm.provider "virtualbox" do |v|
+      v.memory = 1024
+      v.cpus = 2
+    end
   config.vm.provision "shell", inline: $bootstrap
   config.vm.provision "shell", inline: $provision, privileged: false
 end
