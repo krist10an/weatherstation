@@ -6,6 +6,9 @@
  * which used the WS2015H as the receiver
  *
  * kt Oct 2011
+ *
+ * - Add simple recursive filtering
+ * krist10an 2016
  */
 
 
@@ -46,8 +49,7 @@
 
  struct sensor {
   unsigned char humidity;
-  signed char   temp_int;
-  unsigned char temp_dec;
+  float         temp;
   boolean updated;
 };
 
@@ -68,6 +70,21 @@ unsigned long currentTime;
 boolean metric = true;
 
 unsigned long myTimestamp;
+
+
+/*
+ * Linear recursive expontential filter
+ * Weight = 0-1 (0-100%)
+ * Height weight responds quickly to changes
+ * Low smooths out changes
+ */
+void expFilterF(float &current, float newValue, float weight) {
+  current = weight * newValue + (1.0f - weight) * current;
+}
+
+void expFilterC(unsigned char &current, unsigned char newValue, unsigned char weight) {
+  current = (weight * newValue + (100 - weight) * current) / 100;
+}
 
 
 //int chWithNewData=0;
@@ -184,7 +201,6 @@ void receive()
         //       Serial.print(t_dec,DEC);
         //       Serial.println("");
 
-
         if (net < NETWORK_COUNT)
         {
             Serial.print("Update measurement ");
@@ -192,9 +208,13 @@ void receive()
             Serial.print(" ");
             Serial.print(id);
             Serial.println("");
-            measurement[net][id].temp_int = t_int;
-            measurement[net][id].temp_dec = t_dec;
-            measurement[net][id].humidity = rh;
+
+            float temp = t_dec/10.0;
+            temp = temp + t_int;
+
+            // Weight of 20 should be good to filter out spurious measurements
+            expFilterF(measurement[net][id].temp, temp, 0.2);
+            expFilterC(measurement[net][id].humidity, rh, 20);
             measurement[net][id].updated = true;
             lastReceivedTimestamp = millis();
         }
@@ -245,8 +265,7 @@ void setup()
   {
     for (k=0; k<SENSOR_COUNT; k++)
     {
-      measurement[l][k].temp_int = 0;
-      measurement[l][k].temp_dec = 0;
+      measurement[l][k].temp = 0;
       measurement[l][k].humidity = 0;
       measurement[l][k].updated = false;
   }
@@ -293,8 +312,7 @@ void loop()
    {
      if (true == newDataReceived(n,c))
      {
-       float temp= measurement[n][c].temp_dec/10.0;
-       temp = temp + measurement[n][c].temp_int;
+       float temp= measurement[n][c].temp;
        float rh = measurement[n][c].humidity;
        measurement[n][c].updated = false;
        Serial.print("Send n=");
@@ -336,6 +354,3 @@ void loop()
         lastPostTimestamp = currentTime;
     }
 }
-
-
-
