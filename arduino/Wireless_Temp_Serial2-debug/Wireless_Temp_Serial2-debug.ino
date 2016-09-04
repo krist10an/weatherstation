@@ -24,15 +24,15 @@
 #define CHILD_ID_HUM 0
 #define CHILD_ID_TEMP 1
 
- MySensor gw;
- MyMessage msgHum1(10, V_HUM);
- MyMessage msgTemp1(11, V_TEMP);
- MyMessage msgHum2(20, V_HUM);
- MyMessage msgTemp2(21, V_TEMP);
- MyMessage msgHum3(30, V_HUM);
- MyMessage msgTemp3(31, V_TEMP);
- MyMessage msgHum4(40, V_HUM);
- MyMessage msgTemp4(41, V_TEMP);
+MySensor gw;
+MyMessage msgHum1(10, V_HUM);
+MyMessage msgTemp1(11, V_TEMP);
+MyMessage msgHum2(20, V_HUM);
+MyMessage msgTemp2(21, V_TEMP);
+MyMessage msgHum3(30, V_HUM);
+MyMessage msgTemp3(31, V_TEMP);
+MyMessage msgHum4(40, V_HUM);
+MyMessage msgTemp4(41, V_TEMP);
 
 
 #define TIMEOUT 65000
@@ -46,14 +46,12 @@
 #define MSGLENGTH 36
 #define DELAY_BETWEEN_POSTS 5000
 
-
- struct sensor {
+struct sensor {
   unsigned char humidity;
   float         temp;
   boolean updated;
+  boolean first;
 };
-
-
 struct sensor measurement[NETWORK_COUNT][SENSOR_COUNT+1];
 
 unsigned long time;
@@ -71,7 +69,6 @@ boolean metric = true;
 
 unsigned long myTimestamp;
 
-
 /*
  * Linear recursive expontential filter
  * Weight = 0-1 (0-100%)
@@ -86,13 +83,9 @@ void expFilterC(unsigned char &current, unsigned char newValue, unsigned char we
   current = (weight * newValue + (100 - weight) * current) / 100;
 }
 
-
-//int chWithNewData=0;
-
 // This is the interupt driven receive data code
 void receive()
 {
-    //unsigned char i;
     unsigned char bit;
     unsigned long current = micros();
     unsigned long diff = current - time;
@@ -119,8 +112,6 @@ void receive()
     else
     {
         goto reset;
-        //reset;
-        //return;
     }
 
     data[bitcount / 8] = data[bitcount / 8] << 1;
@@ -131,8 +122,6 @@ void receive()
     {
         if (data[0] != 0x0c){
             goto reset;
-            //reset();
-            //return;
         }
         bitcount = 8;
 #ifdef DEBUG
@@ -179,28 +168,6 @@ void receive()
         Serial.print(time);
         Serial.println("");
 
-
-
-        // CSV data out to serial host an alternative to the above
-
-        //       Serial.print("ESIC,");               // The name on the front
-        //       net = 0x0F & (data[1]>>4);           // the -1 in original code removed
-        //                                            // 0x07 --> 0x0F to permit NET up to 15 tobe decodeed instead of 7
-        //       Serial.print(net,DEC);               // Housecode is 1 to 15
-        //       Serial.print(",");
-        //       id = 0x03 & (data[1]>>2)+1;
-        //       Serial.print(id, DEC);               // Channel is 1 to 4, this and above changed so serial.print agrees with lcd displays
-        //       Serial.print(",");
-        //       rh = data[2];
-        //       Serial.print(rh, DEC);               // Only WT450H has a Humidity sensor, WT450 is just Temperature
-        //       Serial.print(",");
-        //       t_int = data[3]-50;
-        //       Serial.print(t_int, DEC);
-        //       t_dec = data[4]>>1;
-        //       Serial.print('.');
-        //       Serial.print(t_dec,DEC);
-        //       Serial.println("");
-
         if (net < NETWORK_COUNT)
         {
             Serial.print("Update measurement ");
@@ -209,24 +176,29 @@ void receive()
             Serial.print(id);
             Serial.println("");
 
-            float temp = t_dec/10.0;
+            float temp = t_dec / 10.0;
             temp = temp + t_int;
 
-            // Weight of 20 should be good to filter out spurious measurements
-            expFilterF(measurement[net][id].temp, temp, 0.2);
-            expFilterC(measurement[net][id].humidity, rh, 20);
+            if (measurement[net][id].first) {
+              measurement[net][id].temp = temp;
+              measurement[net][id].humidity = rh;
+              measurement[net][id].first = false;
+            } else {
+              // Weight of 20 should be good to filter out spurious measurements
+              expFilterF(measurement[net][id].temp, temp, 0.2);
+              expFilterC(measurement[net][id].humidity, rh, 20);
+            }
             measurement[net][id].updated = true;
             lastReceivedTimestamp = millis();
         }
         goto reset;
-        //reset();
-        //return;
     }
     return;
 
 reset: // set all the receiver variables back to zero
-reset();
+    reset();
 }
+
 void reset(){
     for (char i=0; i<DATA_LENGTH; i++)
         data[i] = 0;
@@ -234,13 +206,13 @@ void reset(){
     bytecount = 0;
     bitcount = 0;
     second_half = 0;
-//   return;
 }
 
 void setup()
 {
   int k,l;
   Serial.begin(115200);
+  Serial.println("Starting Temperature Sketch");
 
   gw.begin();
   // Send the Sketch Version Information to the Gateway
@@ -268,10 +240,11 @@ void setup()
       measurement[l][k].temp = 0;
       measurement[l][k].humidity = 0;
       measurement[l][k].updated = false;
+      measurement[l][k].first = true;
+    }
   }
-}
 
-Serial.println("Initialise interrupt");
+  Serial.println("Initialise interrupt");
   attachInterrupt(1,receive,CHANGE); // interrupt 0 is pin D2 1 is pin D3
                                      // needs to be 1 for an ENC28J60 ethernet shield
 
@@ -279,7 +252,7 @@ Serial.println("Initialise interrupt");
   lastPostTimestamp = currentTime;
   Serial.println("Setup complete - Waiting for data");
 
-    myTimestamp= millis();
+  myTimestamp= millis();
 }
 
 
@@ -306,51 +279,51 @@ void loop()
 
 
   if(time_elapsed > DELAY_BETWEEN_POSTS){
-   int n = HOUSECODE;
+    int n = HOUSECODE;
 
-   for (int c=0; c<SENSOR_COUNT; c++)
-   {
-     if (true == newDataReceived(n,c))
-     {
-       float temp= measurement[n][c].temp;
-       float rh = measurement[n][c].humidity;
-       measurement[n][c].updated = false;
-       Serial.print("Send n=");
-       Serial.print(n);
-       Serial.print(" s=");
-       Serial.print(c);
-       Serial.print(" t=");
-       Serial.print(temp);
-       Serial.print(" r=");
-       Serial.print(rh);
-       Serial.print(" timeelapsed: ");
-       Serial.print( (currentTime - myTimestamp) );
-       Serial.println("");
+    for (int c=0; c<SENSOR_COUNT; c++)
+    {
+      if (true == newDataReceived(n,c))
+      {
+         float temp= measurement[n][c].temp;
+         float rh = measurement[n][c].humidity;
+         measurement[n][c].updated = false;
+         Serial.print("Send n=");
+         Serial.print(n);
+         Serial.print(" s=");
+         Serial.print(c);
+         Serial.print(" t=");
+         Serial.print(temp);
+         Serial.print(" r=");
+         Serial.print(rh);
+         Serial.print(" timeelapsed: ");
+         Serial.print( (currentTime - myTimestamp) );
+         Serial.println("");
 
-       myTimestamp = currentTime;
+         myTimestamp = currentTime;
 
          switch (c)
-           {
-             case 1:
-               gw.send(msgTemp1.set(temp, 1));
-               gw.send(msgHum1.set(rh, 1));
-               break;
-             case 2:
-               gw.send(msgTemp2.set(temp, 1));
-               gw.send(msgHum2.set(rh, 1));
-               break;
-             case 3:
-               gw.send(msgTemp3.set(temp, 1));
-               gw.send(msgHum3.set(rh, 1));
-               break;
-             case 4:
-               gw.send(msgTemp4.set(temp, 1));
-               gw.send(msgHum4.set(rh, 1));
-               break;
-           } //switch
+         {
+           case 1:
+             gw.send(msgTemp1.set(temp, 1));
+             gw.send(msgHum1.set(rh, 1));
+             break;
+           case 2:
+             gw.send(msgTemp2.set(temp, 1));
+             gw.send(msgHum2.set(rh, 1));
+             break;
+           case 3:
+             gw.send(msgTemp3.set(temp, 1));
+             gw.send(msgHum3.set(rh, 1));
+             break;
+           case 4:
+             gw.send(msgTemp4.set(temp, 1));
+             gw.send(msgHum4.set(rh, 1));
+             break;
+         } //switch
 
-         } // in new data
-        } // for sensor count
-        lastPostTimestamp = currentTime;
-    }
+       } // in new data
+    } // for sensor count
+    lastPostTimestamp = currentTime;
+  }
 }
