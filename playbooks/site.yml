@@ -3,3 +3,5 @@
   tasks:
   - name: Hello
     debug: Hello
+  roles:
+    - base
